@@ -35,21 +35,26 @@ let coinScore = 0;
 let highScore = localStorage.getItem("highScore") || 0;
 
 let gameSpeed = 4.5; // başlangıç hızı
+let gameOver = false; // Oyun durumu
 
 document.getElementById("score").innerText =
   `Skor: 0 | Rekor: ${highScore} | Coin: 0 | Seviye: ${player.level}`;
 
 // DÜŞMAN OLUŞTURMA
 function spawnEnemy(){
-  let x = Math.random()*350;
-  enemies.push({x:x, y:-100, width:50, height:80, speed:gameSpeed});
+  if(!gameOver){
+    let x = Math.random()*350;
+    enemies.push({x:x, y:-100, width:50, height:80, speed:gameSpeed});
+  }
 }
 setInterval(spawnEnemy,1200);
 
 // COIN OLUŞTURMA
 function spawnCoin(){
-  let x = Math.random()*350;
-  coins.push({x:x, y:-50, width:20, height:20, speed:gameSpeed-1});
+  if(!gameOver){
+    let x = Math.random()*350;
+    coins.push({x:x, y:-50, width:20, height:20, speed:gameSpeed-1});
+  }
 }
 setInterval(spawnCoin,2000);
 
@@ -113,12 +118,33 @@ function crashEffect(){
   ctx.fill();
 }
 
+// OYUN RESET FONKSİYONU
+function resetGame(){
+  player.x = 180;
+  player.y = 500;
+  player.width = 50;
+  player.height = 80;
+  player.level = 1;
+
+  enemies = [];
+  coins = [];
+  score = 0;
+  coinScore = 0;
+  gameSpeed = 4.5;
+  gameOver = false;
+
+  document.getElementById("score").innerText =
+    `Skor: ${score} | Rekor: ${highScore} | Coin: ${coinScore} | Seviye: ${player.level}`;
+  
+  motorSound.play(); // oyun yeniden başlıyor, motor sesi tekrar aktif
+}
+
 // ARABA UPGRADE
 function upgradeCar(){
   if(coinScore >= 10){
     coinScore -= 10;
     player.level +=1;
-    player.speed +=0.5; // hız artışı dengelendi
+    player.speed +=0.5;
     player.width +=2;
     player.height +=3;
     document.getElementById("score").innerText =
@@ -129,19 +155,44 @@ function upgradeCar(){
   }
 }
 
+// CANVAS TIKLAMA İLE YENİDEN BAŞLATMA
+canvas.addEventListener("click", ()=>{
+  if(gameOver){
+    resetGame();
+    update(); // update döngüsünü yeniden başlat
+  }
+});
+
 // OYUN GÜNCELLEME
 function update(){
+  if(gameOver){
+    // Game Over ekranı
+    ctx.fillStyle = "rgba(0,0,0,0.7)";
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle = "white";
+    ctx.font = "25px Arial";
+    ctx.fillText("KAZA! Tekrar oynamak için tıkla", 20, 300);
+    return;
+  }
+
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
   drawRoad();
   ctx.drawImage(playerImg,player.x,player.y,player.width,player.height);
 
-  // Motor sesi oyun hızına bağlı
-  motorSound.playbackRate = 1 + (gameSpeed - 4.5) * 0.05;
+  if(!gameOver){
+    // TUŞ BASILI TUTMA AKICI HAREKET
+    if(keys.left) player.x -= player.speed;
+    if(keys.right) player.x += player.speed;
 
-  // TUŞ BASILI TUTMA AKICI HAREKET
-  if(keys.left) player.x -= player.speed;
-  if(keys.right) player.x += player.speed;
+    // Araba yol sınırlarını kontrol et
+    if(player.x < 10) player.x = 10;
+    if(player.x + player.width > 390) player.x = 390 - player.width;
+
+    // Motor sesi oyun hızına göre
+    motorSound.playbackRate = 1 + (gameSpeed - 4.5) * 0.05;
+    if(motorSound.paused) motorSound.play();
+  }
 
   // DÜŞMAN ARABALAR
   for(let i=0;i<enemies.length;i++){
@@ -153,10 +204,12 @@ function update(){
        player.x + player.width > e.x &&
        player.y < e.y + e.height &&
        player.y + player.height > e.y){
+
       crashEffect();
       crashSound.currentTime = 0;
       crashSound.play();
-      setTimeout(()=>{alert(`Kaza yaptın! Skor: ${score}`); location.reload();},200);
+      gameOver = true; // oyun duruyor
+      motorSound.pause(); // motor sesi duruyor
     }
 
     if(e.y>600){
